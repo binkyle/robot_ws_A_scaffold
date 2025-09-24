@@ -30,5 +30,3 @@ ros2 launch qos_rt_lab lab.launch.py
 - `qos_supervisor`：订阅统计，超过阈值自动 `degrade`（best_effort + 降频），恢复后 `restore`。
 - `scripts/run_matrix.py`：批量跑参数矩阵，产出 CSV/JSON。
 
-## 你要提交给招聘方的证据
-- results/ 下的 **JSON/CSV 汇总**；README 里的 **指标表 + 曲线/GIF**；以及你的**阈值/降级策略**说明。
