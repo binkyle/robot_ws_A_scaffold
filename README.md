@@ -1,5 +1,4 @@
 
-# robot_ws_A — ROS 2 QoS + Diagnostics + Degrade/Restore Scaffold (切入点A)
 
 **目标**：用“中间件/QoS + 诊断 + 失效降级”构建一个可投递的系统级 Demo。  
 包含：发布/订阅（1kHz）、QoS 参数切换、诊断健康度、阈值越界自动降级（best_effort/降频）、恢复时再回到高性能模式。
