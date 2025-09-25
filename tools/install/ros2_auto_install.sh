@@ -26,17 +26,33 @@ RESTORE_BACKUPS=0
 ROS_DISTRO_OVERRIDE=""
 LOG_FILE="${HOME}/ros2_auto_install_ft_$(date +%Y%m%d_%H%M%S).log"
 
-log(){ printf "[+] %s\n" "$*" | tee -a "$LOG_FILE" >/dev/null; }
-warn(){ printf "[!] %s\n" "$*" | tee -a "$LOG_FILE" >/dev/null; }
-err(){ printf "[✗] %s\n" "$*" | tee -a "$LOG_FILE" >/dev/null; }
+log(){ printf "[+] %s\n" "$*" | tee -a "$LOG_FILE"; }
+warn(){ printf "[!] %s\n" "$*" | tee -a "$LOG_FILE"; }
+err(){ printf "[X] %s\n" "$*" | tee -a "$LOG_FILE"; }
 run(){
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "DRY-RUN $ %s\n" "$*" | tee -a "$LOG_FILE" >/dev/null
-  else
+    printf "DRY-RUN $ %s\n" "$*" | tee -a "$LOG_FILE"
+    return 0
+  fi
+
+  cmd="$*"
+  tmp_status=$(mktemp)
+  (
+    set +e
     # shellcheck disable=SC2086
-    sh -c "$*" 2>&1 | tee -a "$LOG_FILE" >/dev/null
+    sh -c "$cmd"
+    status=$?
+    printf '%s' "$status" >"$tmp_status"
+    exit "$status"
+  ) 2>&1 | tee -a "$LOG_FILE"
+  status=$(cat "$tmp_status")
+  rm -f "$tmp_status"
+  if [ "$status" -ne 0 ]; then
+    err "Command failed ($status): $cmd"
+    return "$status"
   fi
 }
+
 
 usage(){
   sed -n '1,80p' "$0" | sed 's/^# \{0,1\}//'
@@ -70,7 +86,7 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-trap 'err "Script aborted. See log: $LOG_FILE"' EXIT
+trap 'status=$?; if [ "$status" -ne 0 ]; then err "Script aborted (exit $status). See log: $LOG_FILE"; fi' EXIT
 
 UNAME_S="$(uname -s)"
 if [ "$DOCKER_ONLY" -eq 1 ]; then docker_help; exit 0; fi
