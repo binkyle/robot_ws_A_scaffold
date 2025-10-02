@@ -1,0 +1,101 @@
+diff --git a/src/qos_rt_lab/CMakeLists.txt b/src/qos_rt_lab/CMakeLists.txt
+index 3b6f0ab..c7e3f9a 100644
+--- a/src/qos_rt_lab/CMakeLists.txt
++++ b/src/qos_rt_lab/CMakeLists.txt
+@@ -1,14 +1,18 @@
+ cmake_minimum_required(VERSION 3.8)
+ project(qos_rt_lab)
+ 
++set(CMAKE_CXX_STANDARD 17)
++set(CMAKE_CXX_STANDARD_REQUIRED ON)
++
+ find_package(ament_cmake REQUIRED)
+ find_package(rclcpp REQUIRED)
+ find_package(std_msgs REQUIRED)
++find_package(std_srvs REQUIRED)
+ 
+ add_executable(qos_rt_pub src/qos_rt_pub.cpp)
+-ament_target_dependencies(qos_rt_pub rclcpp std_msgs)
++ament_target_dependencies(qos_rt_pub rclcpp std_msgs std_srvs)
+ 
+ add_executable(qos_rt_sub src/qos_rt_sub.cpp)
+ ament_target_dependencies(qos_rt_sub rclcpp std_msgs)
+ 
+ install(TARGETS qos_rt_pub qos_rt_sub
+   DESTINATION lib/${PROJECT_NAME})
+ ament_package()
+diff --git a/src/qos_rt_lab/package.xml b/src/qos_rt_lab/package.xml
+index 7e5d4a1..8b3f6d2 100644
+--- a/src/qos_rt_lab/package.xml
++++ b/src/qos_rt_lab/package.xml
+@@ -8,8 +8,9 @@
+   <maintainer email="you@example.com">you</maintainer>
+   <license>Apache-2.0</license>
+ 
+   <depend>rclcpp</depend>
+   <depend>std_msgs</depend>
++  <depend>std_srvs</depend>
+ 
+   <export>
+   </export>
+diff --git a/src/qos_rt_lab/src/qos_rt_pub.cpp b/src/qos_rt_lab/src/qos_rt_pub.cpp
+index 4a1f9fb..b6a2e3c 100644
+--- a/src/qos_rt_lab/src/qos_rt_pub.cpp
++++ b/src/qos_rt_lab/src/qos_rt_pub.cpp
+@@ -1,8 +1,9 @@
+-#include <rclcpp/rclcpp.hpp>
+-#include <std_msgs/msg/header.hpp>
++#include <rclcpp/rclcpp.hpp>
++#include <std_msgs/msg/header.hpp>
++#include <std_srvs/srv/trigger.hpp>
+ 
+ // ... 你的其它 include / 成员定义
+ 
+-// 原先 reset 服务（签名不匹配、把 res 当成了 Request）
+-// reset_srv_ = create_service<std_srvs::srv::Trigger>("reset", [this](auto h, auto req){ ... res->success=...; });
++// reset 服务：显式 Request/Response 类型
++// 注意：Trigger::Request 是空的，Response 才有 success/message
++// this->create_service 而不是裸调用 create_service
+@@ -15,9 +16,19 @@
+   // 构造函数中
+-  reset_srv_ = create_service<std_srvs::srv::Trigger>(
+-    "reset",
+-    [this](auto /*header*/, auto /*req*/) {
+-      history_=pristine_.hist; depth_=pristine_.depth; rate_hz_=pristine_.rate; recreate_pub(); create_timer(); res->success=true; res->message="Restored";
+-    });
++  reset_srv_ = this->create_service<std_srvs::srv::Trigger>(
++    "reset",
++    [this](const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
++           std::shared_ptr<std_srvs::srv::Trigger::Response> res) {
++      history_ = pristine_.hist;
++      depth_   = pristine_.depth;
++      rate_hz_ = pristine_.rate;
++      recreate_pub();
++      create_timer();
++      res->success = true;
++      res->message = "Restored";
++    });
+ 
+   // ... 其它逻辑
+diff --git a/src/qos_rt_lab/src/qos_rt_sub.cpp b/src/qos_rt_lab/src/qos_rt_sub.cpp
+index 9c0f3d2..3ef1b1a 100644
+--- a/src/qos_rt_lab/src/qos_rt_sub.cpp
++++ b/src/qos_rt_lab/src/qos_rt_sub.cpp
+@@ -1,7 +1,7 @@
+ #include <rclcpp/rclcpp.hpp>
+ #include <std_msgs/msg/header.hpp>
+ 
+-// 回调用了泛型 lambda（auto），导致 function_traits 推断失败
++// 把泛型 lambda 改成显式类型，避免 function_traits 推断失败
+ 
+ // ... 你的 Node 构造函数里：
+-  sub_ = this->create_subscription<std_msgs::msg::Header>(topic_, qos_, [this](auto msg){
+-    // 使用 msg ...
+-  });
++  sub_ = this->create_subscription<std_msgs::msg::Header>(
++    topic_, qos_,
++    [this](std_msgs::msg::Header::ConstSharedPtr msg){
++      (void)msg->stamp;
++      (void)msg->frame_id;
++      // ... 你的处理逻辑
++    });
