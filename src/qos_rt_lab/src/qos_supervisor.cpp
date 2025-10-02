@@ -1,80 +1,31 @@
-
 #include <chrono>
 #include <memory>
 #include <string>
 #include <rclcpp/rclcpp.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <std_srvs/srv/trigger.hpp>
-
 using namespace std::chrono_literals;
-
-class QoSSupervisor : public rclcpp::Node {
+class Sup : public rclcpp::Node{
 public:
-  QoSSupervisor() : Node("qos_supervisor") {
-    // thresholds via diagnostics level: WARN/ERROR triggers degrade; OK for a while triggers restore
-    degrade_after_warn_count_ = declare_parameter<int>("degrade_after_warn_count", 3);
-    restore_after_ok_count_ = declare_parameter<int>("restore_after_ok_count", 5);
-
-    diag_sub_ = this->create_subscription<diagnostic_msgs::msg::DiagnosticArray>(
-      "/diagnostics", 10,
-      std::bind(&QoSSupervisor::diag_cb, this, std::placeholders::_1));
-
-    cli_degrade_ = this->create_client<std_srvs::srv::Trigger>("/qos_rt_pub/degrade");
-    cli_restore_ = this->create_client<std_srvs::srv::Trigger>("/qos_rt_pub/restore");
-
-    RCLCPP_INFO(this->get_logger(), "qos_supervisor started.");
+  Sup(): Node("qos_supervisor"){
+    d_warn_=declare_parameter<int>("degrade_after_warn_count",3);
+    r_ok_=declare_parameter<int>("restore_after_ok_count",5);
+    sub_=create_subscription<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics",10,[this](auto m){ on_diag(m); });
+    c_deg_=create_client<std_srvs::srv::Trigger>("/qos_rt_pub/degrade");
+    c_res_=create_client<std_srvs::srv::Trigger>("/qos_rt_pub/restore");
   }
-
 private:
-  void diag_cb(const diagnostic_msgs::msg::DiagnosticArray::SharedPtr msg) {
-    int level = 0;
-    for (auto& st : msg->status) {
-      if (st.name.find("QoS Link Health") != std::string::npos) {
-        level = st.level;
-        break;
-      }
-    }
-    if (level == diagnostic_msgs::msg::DiagnosticStatus::ERROR ||
-        level == diagnostic_msgs::msg::DiagnosticStatus::WARN) {
-      warn_count_++;
-      ok_count_ = 0;
-      if (!degraded_ && warn_count_ >= degrade_after_warn_count_) {
-        degraded_ = true; warn_count_ = 0;
-        call_trigger(cli_degrade_, "degrade");
-      }
-    } else { // OK
-      ok_count_++;
-      warn_count_ = 0;
-      if (degraded_ && ok_count_ >= restore_after_ok_count_) {
-        degraded_ = false; ok_count_ = 0;
-        call_trigger(cli_restore_, "restore");
-      }
-    }
+  void on_diag(const diagnostic_msgs::msg::DiagnosticArray::SharedPtr m){
+    int level=0; for(auto& s: m->status){ if(s.name.find("QoS Link Health")!=std::string::npos){ level=s.level; break; } }
+    if(level==1 || level==2){ w_++; o_=0; if(!deg_ && w_>=d_warn_){ deg_=true; w_=0; call(c_deg_,"degrade"); } }
+    else { o_++; w_=0; if(deg_ && o_>=r_ok_){ deg_=false; o_=0; call(c_res_,"restore"); } }
   }
-
-  void call_trigger(rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr cli, const char* tag) {
-    if (!cli->wait_for_service(1s)) {
-      RCLCPP_WARN(this->get_logger(), "Service %s not available", tag);
-      return;
-    }
-    auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
-    auto fut = cli->async_send_request(req);
-    // no blocking required
-    RCLCPP_INFO(this->get_logger(), "Requested %s", tag);
+  void call(rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr c, const char* tag){
+    if(!c->wait_for_service(1s)){ RCLCPP_WARN(get_logger(), "Service %s not ready", tag); return; }
+    auto req=std::make_shared<std_srvs::srv::Trigger::Request>(); (void)c->async_send_request(req); RCLCPP_INFO(get_logger(),"Requested %s", tag);
   }
-
-  rclcpp::Subscription<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_sub_;
-  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr cli_degrade_, cli_restore_;
-  int degrade_after_warn_count_{3};
-  int restore_after_ok_count_{5};
-  int warn_count_{0};
-  int ok_count_{0};
-  bool degraded_{false};
+  rclcpp::Subscription<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr sub_;
+  rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr c_deg_, c_res_;
+  int d_warn_{3}, r_ok_{5}, w_{0}, o_{0}; bool deg_{false};
 };
-
-int main(int argc, char** argv) {
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<QoSSupervisor>());
-  rclcpp::shutdown();
-  return 0;
-}
+int main(int argc,char**argv){ rclcpp::init(argc,argv); rclcpp::spin(std::make_shared<Sup>()); rclcpp::shutdown(); return 0; }

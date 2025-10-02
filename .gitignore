@@ -1,0 +1,12 @@
+
+build/
+install/
+log/
+.colcon/
+results/*
+!results/.gitkeep
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+.DS_Store

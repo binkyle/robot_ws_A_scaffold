@@ -1,0 +1,19 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build-and-bench:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-tooling/setup-ros@v0.6
+        with: { required-ros-distributions: humble }
+      - run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install --packages-select qos_rt_lab
+      - run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          ros2 run qos_rt_lab run_matrix.py --duration_s 8 --out_dir results || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: results, path: results }
