@@ -26,7 +26,7 @@ public:
     create_pub();
     create_timer();
 
-    // Reset 服务：Trigger::Request 是空的；Response 有 success/message
+    // Reset 服务
     reset_srv_ = this->create_service<std_srvs::srv::Trigger>(
       "reset",
       [this](const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
@@ -47,7 +47,8 @@ public:
 
 private:
   void create_pub() {
-    rclcpp::QoS qos(rclcpp::KeepLast(depth_));
+    // 关键修复：用花括号/auto 避免 most-vexing-parse
+    rclcpp::QoS qos{ rclcpp::KeepLast(static_cast<size_t>(depth_)) };
     qos.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
     qos.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
     pub_ = this->create_publisher<std_msgs::msg::Header>("qos_rt_lab/header", qos);
