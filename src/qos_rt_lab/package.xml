@@ -2,7 +2,7 @@
 <package format="3">
   <name>qos_rt_lab</name>
   <version>0.0.1</version>
-  <description>QoS / realtime lab for ROS 2</description>
+  <description>QoS round-trip lab</description>
   <maintainer email="you@example.com">you</maintainer>
   <license>Apache-2.0</license>
 
@@ -13,5 +13,6 @@
   <depend>std_srvs</depend>
 
   <export>
+    <build_type>ament_cmake</build_type>
   </export>
 </package>
